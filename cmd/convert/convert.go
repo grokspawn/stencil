@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/operator-framework/operator-registry/alpha/template/converter"
+	"github.com/grokspawn/stencil/pkg/converter"
 	"github.com/grokspawn/stencil/internal/util"
 )
 

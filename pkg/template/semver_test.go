@@ -1,4 +1,4 @@
-package semver
+package template
 
 import (
 	"fmt"
@@ -249,7 +249,7 @@ func TestLinkChannels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sv := &semverTemplate{pkg: "a", GenerateMajorChannels: tt.generateMajorChannels, GenerateMinorChannels: tt.generateMinorChannels}
+			sv := &SemverTemplate{pkg: "a", GenerateMajorChannels: tt.generateMajorChannels, GenerateMinorChannels: tt.generateMinorChannels}
 			require.ElementsMatch(t, tt.out, sv.linkChannels(tt.unlinkedChannels, &channelOperatorVersions))
 		})
 	}
@@ -464,7 +464,7 @@ func TestGenerateChannels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sv := &semverTemplate{GenerateMajorChannels: tt.generateMajorChannels, GenerateMinorChannels: tt.generateMinorChannels, pkg: "a", DefaultChannelTypePreference: tt.channelTypePreference}
+			sv := &SemverTemplate{GenerateMajorChannels: tt.generateMajorChannels, GenerateMinorChannels: tt.generateMinorChannels, pkg: "a", DefaultChannelTypePreference: tt.channelTypePreference}
 			out := sv.generateChannels(&channelOperatorVersions)
 			require.ElementsMatch(t, tt.out, out)
 			require.Equal(t, tt.defaultChannel, sv.defaultChannel)
@@ -475,13 +475,13 @@ func TestGenerateChannels(t *testing.T) {
 func TestGetVersionsFromStandardChannel(t *testing.T) {
 	tests := []struct {
 		name        string
-		sv          semverTemplate
+		sv          SemverTemplate
 		outVersions bundleVersions
 		dc          declcfg.DeclarativeConfig
 	}{
 		{
 			name: "sunny day case",
-			sv: semverTemplate{
+			sv: SemverTemplate{
 				Stable: semverTemplateChannelBundles{
 					[]semverTemplateBundleEntry{
 						{Image: "repo/origin/a-v0.1.0"},
@@ -548,7 +548,7 @@ func TestGetVersionsFromStandardChannel(t *testing.T) {
 }
 
 func TestBailOnVersionBuildMetadata(t *testing.T) {
-	sv := semverTemplate{
+	sv := SemverTemplate{
 		Stable: semverTemplateChannelBundles{
 			[]semverTemplateBundleEntry{
 				{Image: "repo/origin/a-v0.1.0"},
@@ -631,13 +631,13 @@ stable:
 	type testCase struct {
 		name       string
 		input      string
-		assertions func(*testing.T, *semverTemplate, error)
+		assertions func(*testing.T, *SemverTemplate, error)
 	}
 	testCases := []testCase{
 		{
 			name:  "valid",
 			input: fmt.Sprintf(templateFstr, "true", "true", "minor"),
-			assertions: func(t *testing.T, template *semverTemplate, err error) {
+			assertions: func(t *testing.T, template *SemverTemplate, err error) {
 				require.NotNil(t, template)
 				require.NoError(t, err)
 			},
@@ -675,7 +675,7 @@ invalid:
     bundles:
         - image: quay.io/foo/olm:testoperator.v1.0.1
 `,
-			assertions: func(t *testing.T, template *semverTemplate, err error) {
+			assertions: func(t *testing.T, template *SemverTemplate, err error) {
 				require.Nil(t, template)
 				require.EqualError(t, err, `error unmarshaling JSON: while decoding JSON: json: unknown field "invalid"`)
 			},
@@ -683,7 +683,7 @@ invalid:
 		{
 			name:  "generate/default mismatch, minor/major",
 			input: fmt.Sprintf(templateFstr, "true", "false", "minor"),
-			assertions: func(t *testing.T, template *semverTemplate, err error) {
+			assertions: func(t *testing.T, template *SemverTemplate, err error) {
 				require.Nil(t, template)
 				require.ErrorContains(t, err, "schema attribute mismatch")
 			},
@@ -691,7 +691,7 @@ invalid:
 		{
 			name:  "generate/default mismatch, major/minor",
 			input: fmt.Sprintf(templateFstr, "false", "true", "major"),
-			assertions: func(t *testing.T, template *semverTemplate, err error) {
+			assertions: func(t *testing.T, template *SemverTemplate, err error) {
 				require.Nil(t, template)
 				require.ErrorContains(t, err, "schema attribute mismatch")
 			},
@@ -699,7 +699,7 @@ invalid:
 		{
 			name:  "unknown defaultchanneltypepreference",
 			input: fmt.Sprintf(templateFstr, "false", "true", "foo"),
-			assertions: func(t *testing.T, template *semverTemplate, err error) {
+			assertions: func(t *testing.T, template *SemverTemplate, err error) {
 				require.Nil(t, template)
 				require.ErrorContains(t, err, "unknown DefaultChannelTypePreference")
 			},

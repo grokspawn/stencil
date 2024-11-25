@@ -1,4 +1,4 @@
-package basic
+package template
 
 import (
 	"context"
@@ -11,14 +11,12 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 )
 
-const schema string = "olm.template.basic"
-
-type Template struct {
-	RenderBundle func(context.Context, string) (*declcfg.DeclarativeConfig, error)
+type BasicOptions struct {
+	TemplateOptions
 }
 
 type BasicTemplate struct {
-	Schema  string          `json:"schema"`
+	Template
 	Entries []*declcfg.Meta `json:"entries"`
 }
 
@@ -35,15 +33,11 @@ func parseSpec(reader io.Reader) (*BasicTemplate, error) {
 		return nil, fmt.Errorf("unmarshalling template: %v", err)
 	}
 
-	if bt.Schema != schema {
-		return nil, fmt.Errorf("template has unknown schema (%q), should be %q", bt.Schema, schema)
-	}
-
 	return bt, nil
 }
 
-func (t Template) Render(ctx context.Context, reader io.Reader) (*declcfg.DeclarativeConfig, error) {
-	bt, err := parseSpec(reader)
+func (t BasicOptions) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
+	bt, err := parseSpec(t.Input)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +51,7 @@ func (t Template) Render(ctx context.Context, reader io.Reader) (*declcfg.Declar
 		if !isBundleTemplate(&b) {
 			return nil, fmt.Errorf("unexpected fields present in basic template bundle")
 		}
-		contributor, err := t.RenderBundle(ctx, b.Image)
+		contributor, err := t.TemplateOptions.RenderBundle(ctx, b.Image)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +62,7 @@ func (t Template) Render(ctx context.Context, reader io.Reader) (*declcfg.Declar
 	return cfg, nil
 }
 
-// isBundleTemplate identifies a Bundle template source as having a Schema and Image defined
+// isBundleTemplate identifies a Bundle template source any valid FBC entity as having a Schema and Image defined
 // but no Properties, RelatedImages or Package defined
 func isBundleTemplate(b *declcfg.Bundle) bool {
 	return b.Schema != "" && b.Image != "" && b.Package == "" && len(b.Properties) == 0 && len(b.RelatedImages) == 0
@@ -102,7 +96,6 @@ func FromReader(r io.Reader) (*BasicTemplate, error) {
 	}
 
 	bt := &BasicTemplate{
-		Schema:  schema,
 		Entries: entries,
 	}
 

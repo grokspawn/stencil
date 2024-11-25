@@ -1,4 +1,4 @@
-package semver
+package template
 
 import (
 	"context"
@@ -8,16 +8,84 @@ import (
 
 	"github.com/blang/semver/v4"
 	"k8s.io/apimachinery/pkg/util/errors"
+
 	"sigs.k8s.io/yaml"
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 )
 
-func (t Template) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
+type SemverOptions struct {
+	TemplateOptions
+}
+
+type SemverTemplate struct {
+	Template
+	GenerateMajorChannels        bool                         `json:"generateMajorChannels,omitempty"`
+	GenerateMinorChannels        bool                         `json:"generateMinorChannels,omitempty"`
+	DefaultChannelTypePreference streamType                   `json:"defaultChannelTypePreference,omitempty"`
+	Candidate                    semverTemplateChannelBundles `json:"candidate,omitempty"`
+	Fast                         semverTemplateChannelBundles `json:"fast,omitempty"`
+	Stable                       semverTemplateChannelBundles `json:"stable,omitempty"`
+
+	pkg            string `json:"-"` // the derived package name
+	defaultChannel string `json:"-"` // detected "most stable" channel head
+}
+
+type semverTemplateBundleEntry struct {
+	Image string `json:"image,omitempty"`
+}
+
+type semverTemplateChannelBundles struct {
+	Bundles []semverTemplateBundleEntry `json:"bundles,omitempty"`
+}
+
+// channel "archetypes", restricted in this iteration to just these
+type channelArchetype string
+
+const (
+	candidateChannelArchetype channelArchetype = "candidate"
+	fastChannelArchetype      channelArchetype = "fast"
+	stableChannelArchetype    channelArchetype = "stable"
+)
+
+// mapping channel name --> stability, where higher values indicate greater stability
+var channelPriorities = map[channelArchetype]int{candidateChannelArchetype: 0, fastChannelArchetype: 1, stableChannelArchetype: 2}
+
+// sorting capability for a slice according to the assigned channelPriorities
+type byChannelPriority []channelArchetype
+
+func (b byChannelPriority) Len() int { return len(b) }
+func (b byChannelPriority) Less(i, j int) bool {
+	return channelPriorities[b[i]] < channelPriorities[b[j]]
+}
+func (b byChannelPriority) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+
+type streamType string
+
+const defaultStreamType streamType = ""
+const minorStreamType streamType = "minor"
+const majorStreamType streamType = "major"
+
+// general preference for minor channels
+var streamTypePriorities = map[streamType]int{minorStreamType: 2, majorStreamType: 1, defaultStreamType: 0}
+
+// map of archetypes --> bundles --> bundle-version from the input file
+type bundleVersions map[channelArchetype]map[string]semver.Version // e.g. srcv["stable"]["example-operator.v1.0.0"] = 1.0.0
+
+// the "high-water channel" struct functions as a freely-rising indicator of the "most stable" channel head, so we can use that
+// later as the package's defaultChannel attribute
+type highwaterChannel struct {
+	archetype channelArchetype
+	kind      streamType
+	version   semver.Version
+	name      string
+}
+
+func (t SemverOptions) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
 	var out declcfg.DeclarativeConfig
 
-	sv, err := readFile(t.Data)
+	sv, err := readFile(t.Input)
 	if err != nil {
 		return nil, fmt.Errorf("render: unable to read file: %v", err)
 	}
@@ -26,7 +94,7 @@ func (t Template) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error
 
 	bundleDict := buildBundleList(*sv)
 	for b := range bundleDict {
-		c, err := t.RenderBundle(ctx, b)
+		c, err := t.TemplateOptions.RenderBundle(ctx, b)
 		if err != nil {
 			return nil, err
 		}
@@ -54,7 +122,7 @@ func (t Template) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error
 	return &out, nil
 }
 
-func buildBundleList(t semverTemplate) map[string]string {
+func buildBundleList(t SemverTemplate) map[string]string {
 	dict := make(map[string]string)
 	for _, bl := range []semverTemplateChannelBundles{t.Candidate, t.Fast, t.Stable} {
 		for _, b := range bl.Bundles {
@@ -66,19 +134,15 @@ func buildBundleList(t semverTemplate) map[string]string {
 	return dict
 }
 
-func readFile(reader io.Reader) (*semverTemplate, error) {
+func readFile(reader io.Reader) (*SemverTemplate, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
 
-	sv := semverTemplate{}
+	sv := SemverTemplate{}
 	if err := yaml.UnmarshalStrict(data, &sv); err != nil {
 		return nil, err
-	}
-
-	if sv.Schema != schema {
-		return nil, fmt.Errorf("readFile: input file has unknown schema, should be %q", schema)
 	}
 
 	// if no generate option is selected, default to GenerateMinorChannels
@@ -111,7 +175,7 @@ func readFile(reader io.Reader) (*semverTemplate, error) {
 	return &sv, nil
 }
 
-func (sv *semverTemplate) getVersionsFromStandardChannels(cfg *declcfg.DeclarativeConfig, bundleDict map[string]string) (*bundleVersions, error) {
+func (sv *SemverTemplate) getVersionsFromStandardChannels(cfg *declcfg.DeclarativeConfig, bundleDict map[string]string) (*bundleVersions, error) {
 	versions := bundleVersions{}
 
 	bdm, err := sv.getVersionsFromChannel(sv.Candidate.Bundles, bundleDict, cfg)
@@ -144,7 +208,7 @@ func (sv *semverTemplate) getVersionsFromStandardChannels(cfg *declcfg.Declarati
 	return &versions, nil
 }
 
-func (sv *semverTemplate) getVersionsFromChannel(semverBundles []semverTemplateBundleEntry, bundleDict map[string]string, cfg *declcfg.DeclarativeConfig) (map[string]semver.Version, error) {
+func (sv *SemverTemplate) getVersionsFromChannel(semverBundles []semverTemplateBundleEntry, bundleDict map[string]string, cfg *declcfg.DeclarativeConfig) (map[string]semver.Version, error) {
 	entries := make(map[string]semver.Version)
 
 	// we iterate over the channel bundles from the template, to:
@@ -206,7 +270,7 @@ func (sv *semverTemplate) getVersionsFromChannel(semverBundles []semverTemplateB
 // - within the same minor version (Y-stream), the head of the channel should have a 'skips' encompassing all lesser Y.Z versions of the bundle enumerated in the template.
 // along the way, uses a highwaterChannel marker to identify the "most stable" channel head to be used as the default channel for the generated package
 
-func (sv *semverTemplate) generateChannels(semverChannels *bundleVersions) []declcfg.Channel {
+func (sv *SemverTemplate) generateChannels(semverChannels *bundleVersions) []declcfg.Channel {
 	outChannels := []declcfg.Channel{}
 
 	// sort the channel archetypes in ascending order so we can traverse the bundles in order of
@@ -280,7 +344,7 @@ func (sv *semverTemplate) generateChannels(semverChannels *bundleVersions) []dec
 	return outChannels
 }
 
-func (sv *semverTemplate) linkChannels(unlinkedChannels map[string]*declcfg.Channel, harvestedVersions *bundleVersions) []declcfg.Channel {
+func (sv *SemverTemplate) linkChannels(unlinkedChannels map[string]*declcfg.Channel, harvestedVersions *bundleVersions) []declcfg.Channel {
 	channels := []declcfg.Channel{}
 
 	// bundle --> version lookup

@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/grokspawn/stencil/template/basic"
+	"github.com/grokspawn/stencil/pkg/template"
 	"github.com/operator-framework/operator-registry/pkg/image"
 	"sigs.k8s.io/yaml"
 )
@@ -18,7 +18,7 @@ type Converter struct {
 }
 
 func (c *Converter) Convert() error {
-	bt, err := basic.FromReader(c.FbcReader)
+	bt, err := template.FromReader(c.FbcReader)
 	if err != nil {
 		return err
 	}
