@@ -1,6 +1,7 @@
 package template
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
@@ -10,19 +11,24 @@ import (
 const BasicSchema string = "olm.template.basic"
 const SemverSchema string = "olm.semver"
 
-func NewTemplate(r io.Reader) (TemplateOptionInterface, error) {
-	dec := yaml.NewYAMLOrJSONDecoder(r, 4096)
+func NewExpander(to TemplateOptions) (TemplateExpanderInterface, error) {
+	b, err := io.ReadAll(to.Input)
+	if err != nil {
+		return nil, err
+	}
+	dec := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(b), 4096)
 
 	var in Template
-	var out TemplateOptionInterface
+	var out TemplateExpanderInterface
 	if err := dec.Decode(&in); err != nil {
 		return nil, err
 	}
+	to.Input = bytes.NewReader(b)
 	switch in.Schema {
 	case BasicSchema:
-		out = &BasicOptions{}
+		out = &BasicOptions{TemplateOptions: to}
 	case SemverSchema:
-		out = &SemverOptions{}
+		out = &SemverOptions{TemplateOptions: to}
 	default:
 		return nil, fmt.Errorf("unknown schema %q", in.Schema)
 	}

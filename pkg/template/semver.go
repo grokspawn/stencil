@@ -82,7 +82,7 @@ type highwaterChannel struct {
 	name      string
 }
 
-func (t SemverOptions) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
+func (t SemverOptions) Expand(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
 	var out declcfg.DeclarativeConfig
 
 	sv, err := readFile(t.Input)

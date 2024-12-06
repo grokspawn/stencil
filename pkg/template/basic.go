@@ -36,7 +36,7 @@ func parseSpec(reader io.Reader) (*BasicTemplate, error) {
 	return bt, nil
 }
 
-func (t BasicOptions) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
+func (t BasicOptions) Expand(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
 	bt, err := parseSpec(t.Input)
 	if err != nil {
 		return nil, err

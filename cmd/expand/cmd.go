@@ -18,7 +18,7 @@ import (
 
 func NewCmd() *cobra.Command {
 	var (
-		output 	string
+		output       string
 		migrateLevel string
 	)
 
@@ -74,23 +74,22 @@ When FILE is '-' or not provided, the template is read from standard input`,
 				}
 			}
 
-			options, err := template.NewTemplate(data)
+			options, err := template.NewExpander(template.TemplateOptions{
+				Input: data,
+				RenderBundle: func(ctx context.Context, ref string) (*declcfg.DeclarativeConfig, error) {
+					renderer := action.Render{
+						Refs:           []string{ref},
+						Registry:       reg,
+						AllowedRefMask: action.RefBundleImage,
+						Migrations:     m,
+					}
+					return renderer.Run(ctx)
+				}})
 			if err != nil {
 				log.Fatalf("detecting template type for %q: %v", source, err)
 			}
-			o := options.(*template.TemplateOptions)
-			o.Input = data
-			o.RenderBundle = func(ctx context.Context, ref string) (*declcfg.DeclarativeConfig, error) {
-				renderer := action.Render{
-					Refs:           []string{ref},
-					Registry:       reg,
-					AllowedRefMask: action.RefBundleImage,
-					Migrations:     m,
-				}
-				return renderer.Run(ctx)
-			}
 
-			cfg, err := o.Render(cmd.Context())
+			cfg, err := options.Expand(cmd.Context())
 			if err != nil {
 				log.Fatalf("rendering %q: %v", source, err)
 			}

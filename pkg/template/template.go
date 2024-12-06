@@ -8,20 +8,19 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 )
 
-type TemplateOptionInterface interface {
-	Render(context.Context) (*declcfg.DeclarativeConfig, error)
+type TemplateExpanderInterface interface {
+	Expand(context.Context) (*declcfg.DeclarativeConfig, error)
 }
 
 type TemplateOptions struct {
-	RenderBundle func(context.Context, string) (*declcfg.DeclarativeConfig, error)
 	Input        io.Reader
-	Output       io.Writer
+	RenderBundle func(context.Context, string) (*declcfg.DeclarativeConfig, error)
 }
 
 type Template struct {
 	Schema string `json:"schema"`
 }
 
-func (t TemplateOptions) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
+func (t TemplateOptions) Expand(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
 	return nil, fmt.Errorf("not implemented")
 }
