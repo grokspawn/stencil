@@ -96,7 +96,8 @@ func FromReader(r io.Reader) (*BasicTemplate, error) {
 	}
 
 	bt := &BasicTemplate{
-		Entries: entries,
+		Template: Template{Schema: BasicSchema},
+		Entries:  entries,
 	}
 
 	return bt, nil

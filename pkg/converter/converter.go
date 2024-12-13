@@ -31,7 +31,6 @@ func (c *Converter) Convert() error {
 		if err != nil {
 			return err
 		}
-		y = append([]byte("---\n"), y...)
 		fmt.Fprintln(os.Stdout, string(y))
 	}
 
